@@ -50,10 +50,12 @@ namespace WmfDotNet.Tests
             Assert.Equal(3, poly.Points.Count);
         }
 
-        [Fact]
-        public Task RenderWmf_SampleFile_ProducesVerifiedImage()
+        [Theory]
+        [InlineData("sample")]
+        [InlineData("sample2")]
+        public Task RenderWmf_SampleFile_ProducesVerifiedImage(string imageName)
         {
-            var wmf = Wmf.FromFile(Path.Combine(TestDataPath, "sample.wmf"));
+            var wmf = Wmf.FromFile(Path.Combine(TestDataPath, $"{imageName}.wmf"));
             var writer = new WmfWriter(wmf);
 
             using var canvas = new SkiaSharpImageCanvas(100, 100);
@@ -78,14 +80,19 @@ namespace WmfDotNet.Tests
             Assert.True(wmf.Records.Count > 0);
         }
 
-        [Fact]
-        public void WmfWriter_Render_DoesNotThrow()
+        [Theory]
+        [InlineData("sample")]
+        [InlineData("sample2")]
+        public void WmfWriter_Render_DoesNotThrow(string imageName)
         {
-            var wmf = Wmf.FromFile(Path.Combine(TestDataPath, "sample.wmf"));
+            var wmf = Wmf.FromFile(Path.Combine(TestDataPath, $"{imageName}.wmf"));
             var writer = new WmfWriter(wmf);
 
             using var canvas = new SkiaSharpImageCanvas(200, 200);
-            var ex = Record.Exception(() => writer.Render(canvas, 200, 200));
+            
+            var ex = Record.Exception(() =>
+                writer.Render(canvas, 200, 200));
+            
             Assert.Null(ex);
         }
     }
