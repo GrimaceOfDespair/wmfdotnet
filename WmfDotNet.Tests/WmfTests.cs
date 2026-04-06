@@ -10,12 +10,12 @@ namespace WmfDotNet.Tests
     public class WmfTests
     {
         private static string TestDataPath =>
-            System.IO.Path.Combine(System.IO.Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!, "TestData");
+            Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location)!, "TestData");
 
         [Fact]
         public void ParseWmf_SampleFile_ReadsCorrectly()
         {
-            var wmf = Wmf.FromFile(System.IO.Path.Combine(TestDataPath, "sample.wmf"));
+            var wmf = Wmf.FromFile(Path.Combine(TestDataPath, "sample.wmf"));
 
             Assert.NotNull(wmf);
             Assert.Null(wmf.SpecialHeader);  // standard WMF, no placeable header
@@ -28,7 +28,7 @@ namespace WmfDotNet.Tests
         [Fact]
         public void ParseWmf_SampleFile_ContainsExpectedRecords()
         {
-            var wmf = Wmf.FromFile(System.IO.Path.Combine(TestDataPath, "sample.wmf"));
+            var wmf = Wmf.FromFile(Path.Combine(TestDataPath, "sample.wmf"));
 
             var funcs = wmf.Records.ConvertAll(r => r.Function);
             Assert.Contains(WmfFunc.SetWindowOrg, funcs);
@@ -41,7 +41,7 @@ namespace WmfDotNet.Tests
         [Fact]
         public void ParseWmf_SampleFile_PolygonHasCorrectPoints()
         {
-            var wmf = Wmf.FromFile(System.IO.Path.Combine(TestDataPath, "sample.wmf"));
+            var wmf = Wmf.FromFile(Path.Combine(TestDataPath, "sample.wmf"));
 
             var polyRecord = wmf.Records.Find(r => r.Function == WmfFunc.Polygon);
             Assert.NotNull(polyRecord);
@@ -53,7 +53,7 @@ namespace WmfDotNet.Tests
         [Fact]
         public Task RenderWmf_SampleFile_ProducesVerifiedImage()
         {
-            var wmf = Wmf.FromFile(System.IO.Path.Combine(TestDataPath, "sample.wmf"));
+            var wmf = Wmf.FromFile(Path.Combine(TestDataPath, "sample.wmf"));
             var writer = new WmfWriter(wmf);
 
             using var canvas = new SkiaSharpImageCanvas(100, 100);
@@ -70,7 +70,7 @@ namespace WmfDotNet.Tests
         [Fact]
         public void ParseWmf_FromStream_Works()
         {
-            var filePath = System.IO.Path.Combine(TestDataPath, "sample.wmf");
+            var filePath = Path.Combine(TestDataPath, "sample.wmf");
             using var stream = File.OpenRead(filePath);
             var wmf = new Wmf(stream);
 
@@ -81,7 +81,7 @@ namespace WmfDotNet.Tests
         [Fact]
         public void WmfWriter_Render_DoesNotThrow()
         {
-            var wmf = Wmf.FromFile(System.IO.Path.Combine(TestDataPath, "sample.wmf"));
+            var wmf = Wmf.FromFile(Path.Combine(TestDataPath, "sample.wmf"));
             var writer = new WmfWriter(wmf);
 
             using var canvas = new SkiaSharpImageCanvas(200, 200);

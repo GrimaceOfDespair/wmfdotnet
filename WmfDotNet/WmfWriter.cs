@@ -30,7 +30,6 @@ namespace WmfDotNet
             int windowOrgX = 0, windowOrgY = 0;
             int windowExtX = width, windowExtY = height;
             NGraphics.Color backgroundColor = Colors.White;
-            var polyFillMode = WmfPolyFillMode.Alternate;
 
             // Fill background
             canvas.FillRectangle(new Rect(0, 0, width, height), backgroundColor);
@@ -98,8 +97,9 @@ namespace WmfDotNet
                         break;
 
                     case WmfFunc.SetPolyFillMode:
-                        if (record.Params is WmfParamsSetPolyFillMode pfm)
-                            polyFillMode = pfm.PolyFillMode;
+                        // PolyFillMode affects even-odd vs winding fill; NGraphics ICanvas
+                        // does not expose fill-rule control, so this record is acknowledged but
+                        // the default (alternate/even-odd) fill is always used.
                         break;
 
                     case WmfFunc.Eof:

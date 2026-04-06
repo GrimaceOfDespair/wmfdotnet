@@ -154,7 +154,7 @@ namespace WmfDotNet.Tests
         {
             if (image is not SkiaSharpImage skImg) return;
             using var bmp = SKBitmap.Decode(skImg.PngData);
-            using var paint = new SKPaint { Color = new SKColor(255, 255, 255, (byte)(alpha * 255)) };
+            using var paint = new SKPaint { Color = SKColors.White.WithAlpha((byte)(alpha * 255)) };
             _canvas.DrawBitmap(bmp, ToSKRect(frame), paint);
         }
 
