@@ -58,8 +58,10 @@ namespace WmfDotNet.Tests
             var wmf = Wmf.FromFile(Path.Combine(TestDataPath, $"{imageName}.wmf"));
             var writer = new WmfWriter(wmf);
 
-            using var canvas = new SkiaSharpImageCanvas(100, 100);
-            writer.Render(canvas, 100, 100);
+            var (canvasW, canvasH) = writer.GetRenderSize(maxDimension: 500);
+
+            using var canvas = new SkiaSharpImageCanvas(canvasW, canvasH);
+            writer.Render(canvas, canvasW, canvasH);
 
             var image = canvas.GetImage();
             using var ms = new MemoryStream();
@@ -87,11 +89,12 @@ namespace WmfDotNet.Tests
         {
             var wmf = Wmf.FromFile(Path.Combine(TestDataPath, $"{imageName}.wmf"));
             var writer = new WmfWriter(wmf);
+            var (canvasW, canvasH) = writer.GetRenderSize(maxDimension: 200);
 
-            using var canvas = new SkiaSharpImageCanvas(200, 200);
+            using var canvas = new SkiaSharpImageCanvas(canvasW, canvasH);
             
             var ex = Record.Exception(() =>
-                writer.Render(canvas, 200, 200));
+                writer.Render(canvas, canvasW, canvasH));
             
             Assert.Null(ex);
         }

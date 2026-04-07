@@ -171,12 +171,21 @@ namespace WmfDotNet
                 {
                     WmfFunc.Polyline => WmfParamsPolyline.Read(pr),
                     WmfFunc.Polygon => WmfParamsPolygon.Read(pr),
+                    WmfFunc.PolyPolygon => WmfParamsPolyPolygon.Read(pr),
                     WmfFunc.SetBkColor => WmfColorRef.Read(pr),
                     WmfFunc.SetBkMode => WmfParamsSetBkMode.Read(pr),
                     WmfFunc.SetPolyFillMode => WmfParamsSetPolyFillMode.Read(pr),
                     WmfFunc.SetRop2 => WmfParamsSetRop2.Read(pr),
                     WmfFunc.SetWindowExt => WmfParamsSetWindowExt.Read(pr),
                     WmfFunc.SetWindowOrg => WmfParamsSetWindowOrg.Read(pr),
+                    WmfFunc.CreateBrushIndirect => WmfParamsCreateBrushIndirect.Read(pr),
+                    WmfFunc.CreatePenIndirect => WmfParamsCreatePenIndirect.Read(pr),
+                    WmfFunc.SelectObject => WmfParamsSelectObject.Read(pr),
+                    WmfFunc.DeleteObject => WmfParamsDeleteObject.Read(pr),
+                    WmfFunc.Rectangle => WmfParamsRectangle.Read(pr),
+                    WmfFunc.Ellipse => WmfParamsEllipse.Read(pr),
+                    WmfFunc.LineTo => WmfParamsLineTo.Read(pr),
+                    WmfFunc.MoveTo => WmfParamsMoveTo.Read(pr),
                     _ => new WmfRawParams(raw)
                 };
             }
@@ -292,6 +301,158 @@ namespace WmfDotNet
 
         internal static WmfPointS Read(BinaryReader reader) =>
             new() { X = reader.ReadInt16(), Y = reader.ReadInt16() };
+    }
+
+    /// <summary>
+    /// Multiple polygons in a single record (section 2.3.3.15 of WMF spec).
+    /// </summary>
+    public class WmfParamsPolyPolygon : IWmfParams
+    {
+        public ushort NumPolygons { get; private set; }
+        public List<List<WmfPointS>> Polygons { get; private set; } = [];
+
+        internal static WmfParamsPolyPolygon Read(BinaryReader reader)
+        {
+            var p = new WmfParamsPolyPolygon { NumPolygons = reader.ReadUInt16() };
+            var counts = new ushort[p.NumPolygons];
+            for (int i = 0; i < p.NumPolygons; i++)
+                counts[i] = reader.ReadUInt16();
+            for (int i = 0; i < p.NumPolygons; i++)
+            {
+                var polygon = new List<WmfPointS>(counts[i]);
+                for (int j = 0; j < counts[i]; j++)
+                    polygon.Add(WmfPointS.Read(reader));
+                p.Polygons.Add(polygon);
+            }
+            return p;
+        }
+    }
+
+    /// <summary>
+    /// Defines a brush by style and color. The brush fills closed shapes.
+    /// Common styles: 0=solid, 1=null/hollow, 2=hatched. See WMF spec section 2.1.1.4.
+    /// </summary>
+    public class WmfParamsCreateBrushIndirect : IWmfParams
+    {
+        /// <summary>0=solid, 1=null/hollow, 2=hatched</summary>
+        public ushort BrushStyle { get; private set; }
+        public WmfColorRef Color { get; private set; } = null!;
+        public ushort BrushHatch { get; private set; }
+
+        public bool IsNull => BrushStyle == 1;
+
+        internal static WmfParamsCreateBrushIndirect Read(BinaryReader reader)
+        {
+            return new WmfParamsCreateBrushIndirect
+            {
+                BrushStyle = reader.ReadUInt16(),
+                Color = WmfColorRef.Read(reader),
+                BrushHatch = reader.ReadUInt16()
+            };
+        }
+    }
+
+    /// <summary>
+    /// Defines a pen by style, width, and color. The pen strokes open and closed shapes.
+    /// Common styles: 0=solid, 1=dash, 2=dot, 3=dashdot, 4=dashdotdot, 5=null (invisible), 6=insideframe.
+    /// See WMF spec section 2.1.1.23.
+    /// </summary>
+    public class WmfParamsCreatePenIndirect : IWmfParams
+    {
+        /// <summary>0=solid, 1=dash, 2=dot, 3=dashdot, 4=dashdotdot, 5=null (invisible), 6=insideframe</summary>
+        public ushort PenStyle { get; private set; }
+        public short Width { get; private set; }
+        public WmfColorRef Color { get; private set; } = null!;
+
+        public bool IsNull => PenStyle == 5;
+
+        internal static WmfParamsCreatePenIndirect Read(BinaryReader reader)
+        {
+            var style = reader.ReadUInt16();
+            var wx = reader.ReadInt16();
+            reader.ReadInt16(); // POINT.y — ignored per spec
+            var color = WmfColorRef.Read(reader);
+            return new WmfParamsCreatePenIndirect
+            {
+                PenStyle = style,
+                Width = wx,
+                Color = color
+            };
+        }
+    }
+
+    public class WmfParamsSelectObject : IWmfParams
+    {
+        public ushort ObjectIndex { get; private set; }
+
+        internal static WmfParamsSelectObject Read(BinaryReader reader) =>
+            new() { ObjectIndex = reader.ReadUInt16() };
+    }
+
+    public class WmfParamsDeleteObject : IWmfParams
+    {
+        public ushort ObjectIndex { get; private set; }
+
+        internal static WmfParamsDeleteObject Read(BinaryReader reader) =>
+            new() { ObjectIndex = reader.ReadUInt16() };
+    }
+
+    /// <summary>
+    /// Draws a rectangle. Coordinates are specified bottom-right-top-left (per WMF spec).
+    /// </summary>
+    public class WmfParamsRectangle : IWmfParams
+    {
+        public short Bottom { get; private set; }
+        public short Right { get; private set; }
+        public short Top { get; private set; }
+        public short Left { get; private set; }
+
+        internal static WmfParamsRectangle Read(BinaryReader reader) =>
+            new()
+            {
+                Bottom = reader.ReadInt16(),
+                Right = reader.ReadInt16(),
+                Top = reader.ReadInt16(),
+                Left = reader.ReadInt16()
+            };
+    }
+
+    /// <summary>
+    /// Draws an ellipse within the bounding rectangle. Coordinates: bottom-right-top-left.
+    /// </summary>
+    public class WmfParamsEllipse : IWmfParams
+    {
+        public short Bottom { get; private set; }
+        public short Right { get; private set; }
+        public short Top { get; private set; }
+        public short Left { get; private set; }
+
+        internal static WmfParamsEllipse Read(BinaryReader reader) =>
+            new()
+            {
+                Bottom = reader.ReadInt16(),
+                Right = reader.ReadInt16(),
+                Top = reader.ReadInt16(),
+                Left = reader.ReadInt16()
+            };
+    }
+
+    public class WmfParamsLineTo : IWmfParams
+    {
+        public short Y { get; private set; }
+        public short X { get; private set; }
+
+        internal static WmfParamsLineTo Read(BinaryReader reader) =>
+            new() { Y = reader.ReadInt16(), X = reader.ReadInt16() };
+    }
+
+    public class WmfParamsMoveTo : IWmfParams
+    {
+        public short Y { get; private set; }
+        public short X { get; private set; }
+
+        internal static WmfParamsMoveTo Read(BinaryReader reader) =>
+            new() { Y = reader.ReadInt16(), X = reader.ReadInt16() };
     }
 
     public enum WmfMetafileType : ushort
