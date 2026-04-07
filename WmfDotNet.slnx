@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="WmfDotNet.Tests/WmfDotNet.Tests.csproj" />
+  <Project Path="WmfDotNet/WmfDotNet.csproj" />
+</Solution>
