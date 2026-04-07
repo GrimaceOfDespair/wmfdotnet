@@ -4,6 +4,12 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Version>0.1.0</Version>
+    <PackageId>WmfDotNet</PackageId>
+    <Description>Library to read and rasterize WMF (Windows Metafile Format) files</Description>
+    <Authors>GrimaceOfDespair</Authors>
+    <RepositoryUrl>https://github.com/GrimaceOfDespair/wmfdotnet</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
   <ItemGroup>
