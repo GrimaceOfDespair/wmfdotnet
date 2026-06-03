@@ -443,43 +443,43 @@ namespace WmfDotNet
                 Hatch = reader.ReadUInt32()
             };
         }
+    }
 
-        public class EmfParamsExtCreateFontIndirectW : IEmfParams
+    public class EmfParamsExtCreateFontIndirectW : IEmfParams
+    {
+        public uint HandleIndex { get; private set; }
+        public int Height { get; private set; }
+        public int Weight { get; private set; }
+        public bool Italic { get; private set; }
+        public string FaceName { get; private set; } = string.Empty;
+
+        internal static EmfParamsExtCreateFontIndirectW Read(BinaryReader reader)
         {
-            public uint HandleIndex { get; private set; }
-            public int Height { get; private set; }
-            public int Weight { get; private set; }
-            public bool Italic { get; private set; }
-            public string FaceName { get; private set; } = string.Empty;
+            var handleIndex = reader.ReadUInt32();
+            var height = reader.ReadInt32();
+            _ = reader.ReadInt32(); // lfWidth
+            _ = reader.ReadInt32(); // lfEscapement
+            _ = reader.ReadInt32(); // lfOrientation
+            var weight = reader.ReadInt32();
+            var italic = reader.ReadByte() != 0;
+            _ = reader.ReadByte(); // lfUnderline
+            _ = reader.ReadByte(); // lfStrikeOut
+            _ = reader.ReadByte(); // lfCharSet
+            _ = reader.ReadByte(); // lfOutPrecision
+            _ = reader.ReadByte(); // lfClipPrecision
+            _ = reader.ReadByte(); // lfQuality
+            _ = reader.ReadByte(); // lfPitchAndFamily
+            var faceNameChars = reader.ReadChars(32);
+            var faceName = new string(faceNameChars).TrimEnd('\0');
 
-            internal static EmfParamsExtCreateFontIndirectW Read(BinaryReader reader)
+            return new EmfParamsExtCreateFontIndirectW
             {
-                var handleIndex = reader.ReadUInt32();
-                var height = reader.ReadInt32();
-                _ = reader.ReadInt32(); // lfWidth
-                _ = reader.ReadInt32(); // lfEscapement
-                _ = reader.ReadInt32(); // lfOrientation
-                var weight = reader.ReadInt32();
-                var italic = reader.ReadByte() != 0;
-                _ = reader.ReadByte(); // lfUnderline
-                _ = reader.ReadByte(); // lfStrikeOut
-                _ = reader.ReadByte(); // lfCharSet
-                _ = reader.ReadByte(); // lfOutPrecision
-                _ = reader.ReadByte(); // lfClipPrecision
-                _ = reader.ReadByte(); // lfQuality
-                _ = reader.ReadByte(); // lfPitchAndFamily
-                var faceNameChars = reader.ReadChars(32);
-                var faceName = new string(faceNameChars).TrimEnd('\0');
-
-                return new EmfParamsExtCreateFontIndirectW
-                {
-                    HandleIndex = handleIndex,
-                    Height = height,
-                    Weight = weight,
-                    Italic = italic,
-                    FaceName = faceName
-                };
-            }
+                HandleIndex = handleIndex,
+                Height = height,
+                Weight = weight,
+                Italic = italic,
+                FaceName = faceName
+            };
         }
     }
 

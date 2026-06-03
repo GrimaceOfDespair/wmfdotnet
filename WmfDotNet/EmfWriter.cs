@@ -404,84 +404,78 @@ namespace WmfDotNet
                 default:
                     return false;
             }
+        }
 
-            private static void DrawText(
-                ICanvas canvas,
-                EmfParamsExtTextOutW textOut,
-                EmfParamsExtCreateFontIndirectW? fontParams,
-                Color textColor,
-                uint textAlign,
-                Affine world,
-                int wOrgX, int wOrgY, int wExtX, int wExtY,
-                int vOrgX, int vOrgY, int vExtX, int vExtY,
-                int canvasW, int canvasH)
+        private static void DrawText(
+            ICanvas canvas,
+            EmfParamsExtTextOutW textOut,
+            EmfParamsExtCreateFontIndirectW? fontParams,
+            Color textColor,
+            uint textAlign,
+            Affine world,
+            int wOrgX, int wOrgY, int wExtX, int wExtY,
+            int vOrgX, int vOrgY, int vExtX, int vExtY,
+            int canvasW, int canvasH)
+        {
+            var (x, y) = MapPoint(textOut.Reference.X, textOut.Reference.Y, world,
+                wOrgX, wOrgY, wExtX, wExtY, vOrgX, vOrgY, vExtX, vExtY, canvasW, canvasH);
+
+            var font = MakeFont(fontParams, world, wOrgX, wOrgY, wExtX, wExtY, vOrgX, vOrgY, vExtX, vExtY, canvasW, canvasH);
+            var fontSize = Math.Max(1.0, font.Size);
+
+            var alignment = ToTextAlignment(textAlign);
+            var (frameX, frameWidth) = alignment switch
             {
-                var (x, y) = MapPoint(textOut.Reference.X, textOut.Reference.Y, world,
-                    wOrgX, wOrgY, wExtX, wExtY, vOrgX, vOrgY, vExtX, vExtY, canvasW, canvasH);
+                TextAlignment.Right => (0.0, Math.Max(1.0, x)),
+                TextAlignment.Center => (x - canvasW / 2.0, Math.Max(1.0, canvasW)),
+                _ => (x, Math.Max(1.0, canvasW - x))
+            };
 
-                var font = MakeFont(fontParams, world, wOrgX, wOrgY, wExtX, wExtY, vOrgX, vOrgY, vExtX, vExtY, canvasW, canvasH);
-                var fontSize = Math.Max(1.0, font.Size);
+            var frameY = UsesTopAlignment(textAlign) ? y : y - fontSize;
+            canvas.DrawText(textOut.Text, new Rect(frameX, frameY, frameWidth, fontSize), font, alignment, null, new SolidBrush(textColor));
+        }
 
-                var alignment = ToTextAlignment(textAlign);
-                var (frameX, frameWidth) = alignment switch
-                {
-                    TextAlignment.Right => (0.0, Math.Max(1.0, x)),
-                    TextAlignment.Center => (x - canvasW / 2.0, Math.Max(1.0, canvasW)),
-                    _ => (x, Math.Max(1.0, canvasW - x))
-                };
+        private static Font MakeFont(
+            EmfParamsExtCreateFontIndirectW? fontParams,
+            Affine world,
+            int wOrgX, int wOrgY, int wExtX, int wExtY,
+            int vOrgX, int vOrgY, int vExtX, int vExtY,
+            int canvasW, int canvasH)
+        {
+            if (fontParams == null)
+                return new Font("Arial", 12.0);
 
-                var frameY = UsesTopAlignment(textAlign) ? y : y - fontSize;
-                canvas.DrawText(textOut.Text, new Rect(frameX, frameY, frameWidth, fontSize), font, alignment, null, new SolidBrush(textColor));
-            }
+            var logicalHeight = Math.Abs(fontParams.Height);
+            if (logicalHeight <= 0)
+                logicalHeight = 12;
 
-            private static Font MakeFont(
-                EmfParamsExtCreateFontIndirectW? fontParams,
-                Affine world,
-                int wOrgX, int wOrgY, int wExtX, int wExtY,
-                int vOrgX, int vOrgY, int vExtX, int vExtY,
-                int canvasW, int canvasH)
-            {
-                if (fontParams == null)
-                    return new Font("Arial", 12.0);
+            var (x0, y0) = MapPoint(0, 0, world, wOrgX, wOrgY, wExtX, wExtY, vOrgX, vOrgY, vExtX, vExtY, canvasW, canvasH);
+            var (x1, y1) = MapPoint(0, logicalHeight, world, wOrgX, wOrgY, wExtX, wExtY, vOrgX, vOrgY, vExtX, vExtY, canvasW, canvasH);
+            var size = Math.Sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0));
+            size = Math.Max(1.0, size);
 
-                var logicalHeight = Math.Abs(fontParams.Height);
-                if (logicalHeight <= 0)
-                    logicalHeight = 12;
+            var family = string.IsNullOrWhiteSpace(fontParams.FaceName) ? "Arial" : fontParams.FaceName;
+            return new Font(family, size);
+        }
 
-                var (x0, y0) = MapPoint(0, 0, world, wOrgX, wOrgY, wExtX, wExtY, vOrgX, vOrgY, vExtX, vExtY, canvasW, canvasH);
-                var (x1, y1) = MapPoint(0, logicalHeight, world, wOrgX, wOrgY, wExtX, wExtY, vOrgX, vOrgY, vExtX, vExtY, canvasW, canvasH);
-                var size = Math.Sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0));
-                size = Math.Max(1.0, size);
+        private static TextAlignment ToTextAlignment(uint textAlign)
+        {
+            // TA_CENTER=0x0006, TA_RIGHT=0x0002, TA_LEFT=0x0000.
+            if ((textAlign & 0x0006) == 0x0006)
+                return TextAlignment.Center;
+            if ((textAlign & 0x0002) != 0)
+                return TextAlignment.Right;
+            return TextAlignment.Left;
+        }
 
-                var style = FontStyle.Normal;
-                if (fontParams.Weight >= 600)
-                    style |= FontStyle.Bold;
-                if (fontParams.Italic)
-                    style |= FontStyle.Italic;
-
-                var family = string.IsNullOrWhiteSpace(fontParams.FaceName) ? "Arial" : fontParams.FaceName;
-                return new Font(family, size, style);
-            }
-
-            private static TextAlignment ToTextAlignment(uint textAlign)
-            {
-                // TA_CENTER=0x0006, TA_RIGHT=0x0002, TA_LEFT=0x0000.
-                if ((textAlign & 0x0006) == 0x0006)
-                    return TextAlignment.Center;
-                if ((textAlign & 0x0002) != 0)
-                    return TextAlignment.Right;
-                return TextAlignment.Left;
-            }
-
-            private static bool UsesTopAlignment(uint textAlign)
-            {
-                // TA_BASELINE=0x0018 and TA_BOTTOM=0x0008 use a baseline/bottom reference point.
-                if ((textAlign & 0x0018) == 0x0018)
-                    return false;
-                if ((textAlign & 0x0008) != 0)
-                    return false;
-                return true;
-            }
+        private static bool UsesTopAlignment(uint textAlign)
+        {
+            // TA_BASELINE=0x0018 and TA_BOTTOM=0x0008 use a baseline/bottom reference point.
+            if ((textAlign & 0x0018) == 0x0018)
+                return false;
+            if ((textAlign & 0x0008) != 0)
+                return false;
+            return true;
         }
 
         private static Brush MakeBrush(EmfParamsCreateBrushIndirect brush)
