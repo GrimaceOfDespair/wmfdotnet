@@ -49,6 +49,7 @@ namespace WmfDotNet.Tests
         [Theory]
         [InlineData("sample")]
         [InlineData("sample2")]
+        [InlineData("sample3")]
         public Task RenderEmf_SampleFile_ProducesVerifiedImage(string imageName)
         {
             var emf = Emf.FromFile(Path.Combine(TestDataPath, $"{imageName}.emf"));
@@ -70,6 +71,7 @@ namespace WmfDotNet.Tests
         [Theory]
         [InlineData("sample")]
         [InlineData("sample2")]
+        [InlineData("sample3")]
         public void EmfWriter_Render_DoesNotThrow(string imageName)
         {
             var emf = Emf.FromFile(Path.Combine(TestDataPath, $"{imageName}.emf"));

@@ -35,13 +35,13 @@ namespace WmfDotNet
         {
             if (canvas == null) throw new ArgumentNullException(nameof(canvas));
 
-            int windowOrgX = 0, windowOrgY = 0;
+            int windowOrgX = _emf.Header.Bounds.Left, windowOrgY = _emf.Header.Bounds.Top;
             int windowExtX = Math.Max(1, Math.Abs(_emf.Header.Bounds.Right - _emf.Header.Bounds.Left));
             int windowExtY = Math.Max(1, Math.Abs(_emf.Header.Bounds.Bottom - _emf.Header.Bounds.Top));
 
             int viewportOrgX = 0, viewportOrgY = 0;
-            int viewportExtX = _emf.Header.DeviceSizePixels.X != 0 ? Math.Abs(_emf.Header.DeviceSizePixels.X) : width;
-            int viewportExtY = _emf.Header.DeviceSizePixels.Y != 0 ? Math.Abs(_emf.Header.DeviceSizePixels.Y) : height;
+            int viewportExtX = windowExtX;
+            int viewportExtY = windowExtY;
 
             Color backgroundColor = Colors.White;
             var world = Affine.Identity;
