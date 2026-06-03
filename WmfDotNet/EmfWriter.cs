@@ -10,6 +10,7 @@ namespace WmfDotNet
     public class EmfWriter
     {
         private readonly Emf _emf;
+        private static readonly Color Transparent = new(0, 0, 0, 0);
 
         public EmfWriter(Emf emf)
         {
@@ -45,7 +46,7 @@ namespace WmfDotNet
             Color backgroundColor = Colors.White;
             var world = Affine.Identity;
 
-            var objectTable = new Dictionary<uint, EmfGdiObject>();
+            var gdiObjectTable = new Dictionary<uint, EmfGdiObject>();
 
             Pen currentPen = new Pen(Colors.Black, 1);
             Brush currentBrush = new SolidBrush(Colors.Black);
@@ -119,14 +120,14 @@ namespace WmfDotNet
                     case EmfFunc.CreateBrushIndirect:
                         if (record.Params is EmfParamsCreateBrushIndirect brush)
                         {
-                            objectTable[brush.HandleIndex] = new EmfGdiObject(EmfGdiObjectKind.Brush, brush);
+                            gdiObjectTable[brush.HandleIndex] = new EmfGdiObject(EmfGdiObjectKind.Brush, brush);
                         }
                         break;
 
                     case EmfFunc.CreatePen:
                         if (record.Params is EmfParamsCreatePen pen)
                         {
-                            objectTable[pen.HandleIndex] = new EmfGdiObject(EmfGdiObjectKind.Pen, pen);
+                            gdiObjectTable[pen.HandleIndex] = new EmfGdiObject(EmfGdiObjectKind.Pen, pen);
                         }
                         break;
 
@@ -136,7 +137,7 @@ namespace WmfDotNet
                             if (TrySelectStockObject(sel.ObjectIndex, ref currentPen, ref currentBrush))
                                 break;
 
-                            if (objectTable.TryGetValue(sel.ObjectIndex, out var obj))
+                            if (gdiObjectTable.TryGetValue(sel.ObjectIndex, out var obj))
                             {
                                 if (obj.Kind == EmfGdiObjectKind.Pen)
                                     currentPen = MakePen((EmfParamsCreatePen)obj.Params);
@@ -148,7 +149,7 @@ namespace WmfDotNet
 
                     case EmfFunc.DeleteObject:
                         if (record.Params is EmfParamsDeleteObject del)
-                            objectTable.Remove(del.ObjectIndex);
+                            gdiObjectTable.Remove(del.ObjectIndex);
                         break;
 
                     case EmfFunc.Polygon:
@@ -250,8 +251,8 @@ namespace WmfDotNet
                             var ry = Math.Min(y1, y2);
                             var rw = Math.Abs(x2 - x1);
                             var rh = Math.Abs(y2 - y1);
-                            var rr = new Size(Math.Abs(roundRect.Corner.X), Math.Abs(roundRect.Corner.Y));
-                            canvas.DrawRectangle(new Rect(rx, ry, rw, rh), rr, currentPen, currentBrush);
+                            var cornerRadius = new Size(Math.Abs(roundRect.Corner.X), Math.Abs(roundRect.Corner.Y));
+                            canvas.DrawRectangle(new Rect(rx, ry, rw, rh), cornerRadius, currentPen, currentBrush);
                         }
                         break;
 
@@ -279,9 +280,10 @@ namespace WmfDotNet
                         break;
 
                     case EmfFunc.SetPolyFillMode:
-                    case EmfFunc.Eof:
-                        if (record.Function == EmfFunc.Eof) return;
                         break;
+
+                    case EmfFunc.Eof:
+                        return;
                 }
             }
         }
@@ -308,7 +310,7 @@ namespace WmfDotNet
             int canvasW, int canvasH,
             bool close)
         {
-            var ops = new List<PathOp>(points.Count + (close ? 2 : 1));
+            var ops = new List<PathOp>(points.Count + (close ? 1 : 0));
             for (int i = 0; i < points.Count; i++)
             {
                 var (x, y) = MapPoint(points[i].X, points[i].Y, world, wOrgX, wOrgY, wExtX, wExtY, vOrgX, vOrgY, vExtX, vExtY, canvasW, canvasH);
@@ -358,7 +360,7 @@ namespace WmfDotNet
                     brush = new SolidBrush(Colors.Black);
                     return true;
                 case 0x80000005: // NULL_BRUSH
-                    brush = new SolidBrush(new Color(0, 0, 0, 0));
+                    brush = new SolidBrush(Transparent);
                     return true;
                 case 0x80000006: // WHITE_PEN
                     pen = new Pen(Colors.White, 1);
@@ -367,7 +369,7 @@ namespace WmfDotNet
                     pen = new Pen(Colors.Black, 1);
                     return true;
                 case 0x80000008: // NULL_PEN
-                    pen = new Pen(new Color(0, 0, 0, 0), 0);
+                    pen = new Pen(Transparent, 0);
                     return true;
                 default:
                     return false;
@@ -377,14 +379,14 @@ namespace WmfDotNet
         private static Brush MakeBrush(EmfParamsCreateBrushIndirect brush)
         {
             if (brush.IsNull)
-                return new SolidBrush(new Color(0, 0, 0, 0));
+                return new SolidBrush(Transparent);
             return new SolidBrush(ToNGraphicsColor(brush.Color));
         }
 
         private static Pen MakePen(EmfParamsCreatePen pen)
         {
             if (pen.IsNull)
-                return new Pen(new Color(0, 0, 0, 0), 0);
+                return new Pen(Transparent, 0);
             double width = pen.Width > 0 ? pen.Width : 1.0;
             return new Pen(ToNGraphicsColor(pen.Color), width);
         }

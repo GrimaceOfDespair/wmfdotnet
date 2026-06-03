@@ -10,7 +10,7 @@ namespace WmfDotNet
     public class Emf
     {
         private const uint EmrHeaderType = 0x00000001;
-        private const uint EmfSignature = 0x464D4520; // " EMF"
+        private const uint EmfSignature = 0x464D4520; // "EMF " in little-endian
 
         public EmfHeader Header { get; private set; } = null!;
         public List<EmfRecord> Records { get; private set; } = [];
@@ -61,9 +61,13 @@ namespace WmfDotNet
                 {
                     // EMR_GDICOMMENT payload: cbData (u4) + data[cbData]
                     // EMF+ comments usually begin with 0x2B464D45 ("EMF+").
-                    uint marker = BitConverter.ToUInt32(raw.Data, 4);
-                    if (marker == 0x2B464D45)
-                        ContainsEmfPlusRecords = true;
+                    uint commentDataLength = BitConverter.ToUInt32(raw.Data, 0);
+                    if (commentDataLength >= 4 && raw.Data.Length >= 4 + commentDataLength)
+                    {
+                        uint emfPlusMarker = BitConverter.ToUInt32(raw.Data, 4);
+                        if (emfPlusMarker == 0x2B464D45)
+                            ContainsEmfPlusRecords = true;
+                    }
                 }
 
                 if (record.Function == EmfFunc.Eof)
