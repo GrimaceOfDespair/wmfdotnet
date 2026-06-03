@@ -473,8 +473,9 @@ namespace WmfDotNet
             _ = reader.ReadByte(); // lfClipPrecision
             _ = reader.ReadByte(); // lfQuality
             var pitchAndFamily = reader.ReadByte();
-            var faceNameChars = reader.ReadChars(32);
-            var faceName = new string(faceNameChars).TrimEnd('\0');
+            // lfFaceName is 32 UTF-16LE characters (64 bytes).
+            var faceNameBytes = reader.ReadBytes(64);
+            var faceName = Encoding.Unicode.GetString(faceNameBytes).TrimEnd('\0');
 
             return new EmfParamsExtCreateFontIndirectW
             {
