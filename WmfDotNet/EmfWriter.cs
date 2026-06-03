@@ -112,10 +112,7 @@ namespace WmfDotNet
 
                     case EmfFunc.SetBkColor:
                         if (record.Params is EmfColorRef bgColor)
-                        {
                             backgroundColor = ToNGraphicsColor(bgColor);
-                            canvas.FillRectangle(new Rect(0, 0, width, height), backgroundColor);
-                        }
                         break;
 
                     case EmfFunc.CreateBrushIndirect:
