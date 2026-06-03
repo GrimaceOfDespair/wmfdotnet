@@ -71,14 +71,18 @@ namespace WmfDotNet.Tests
             paint.Style = SKPaintStyle.Fill;
             paint.IsAntialias = true;
 
-            float textWidth = skFont.MeasureText(text, paint);
             skFont.GetFontMetrics(out var metrics);
 
             float x = (float)frame.X;
-            if (alignment == TextAlignment.Center)
-                x += Math.Max(0, (float)frame.Width - textWidth) / 2f;
-            else if (alignment == TextAlignment.Right)
-                x += Math.Max(0, (float)frame.Width - textWidth);
+            if (alignment != TextAlignment.Left)
+            {
+                float textWidth = skFont.MeasureText(text, paint);
+                float widthDiff = Math.Max(0, (float)frame.Width - textWidth);
+                if (alignment == TextAlignment.Center)
+                    x += widthDiff / 2f;
+                else if (alignment == TextAlignment.Right)
+                    x += widthDiff;
+            }
 
             float y = (float)frame.Y - metrics.Ascent;
             _canvas.DrawText(text, x, y, skFont, paint);

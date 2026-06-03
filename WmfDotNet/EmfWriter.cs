@@ -16,6 +16,7 @@ namespace WmfDotNet
         private const uint TaBottom = 0x0008;
         private const uint TaBaseline = 0x0018;
         private const double BaselineOffsetRatio = 0.8;
+        private const double RotationThresholdDegrees = 0.01;
 
         public EmfWriter(Emf emf)
         {
@@ -427,7 +428,7 @@ namespace WmfDotNet
 
             var font = MakeFont(fontParams, world, wOrgX, wOrgY, wExtX, wExtY, vOrgX, vOrgY, vExtX, vExtY, canvasW, canvasH);
             var fontSize = Math.Max(1.0, font.Size);
-            var frameWidth = EstimateTextWidth(textOut.Text, fontParams, fontSize);
+            var frameWidth = ComputeTextWidth(textOut.Text, fontParams, fontSize);
             var frameHeight = fontSize;
             var frameX = ComputeTextFrameX(ToTextAlignment(textAlign), frameWidth);
             var frameY = ComputeTextFrameY(textAlign, frameHeight);
@@ -435,7 +436,7 @@ namespace WmfDotNet
 
             canvas.SaveState();
             canvas.Transform(NGraphics.Transform.Translate(x, y));
-            if (Math.Abs(rotationDegrees) > double.Epsilon)
+            if (Math.Abs(rotationDegrees) >= RotationThresholdDegrees)
                 canvas.Transform(NGraphics.Transform.Rotate(rotationDegrees));
 
             canvas.DrawText(
@@ -515,7 +516,7 @@ namespace WmfDotNet
             return -frameHeight;
         }
 
-        private static double EstimateTextWidth(string text, EmfParamsExtCreateFontIndirectW? fontParams, double fontSize)
+        private static double ComputeTextWidth(string text, EmfParamsExtCreateFontIndirectW? fontParams, double fontSize)
         {
             if (string.IsNullOrEmpty(text))
                 return 1.0;
