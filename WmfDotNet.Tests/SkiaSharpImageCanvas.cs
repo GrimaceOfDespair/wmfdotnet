@@ -84,6 +84,7 @@ namespace WmfDotNet.Tests
                     x += widthDiff;
             }
 
+            // Convert the frame's top edge into Skia's baseline-based text position.
             float y = (float)frame.Y - metrics.Ascent;
             _canvas.DrawText(text, x, y, skFont, paint);
         }

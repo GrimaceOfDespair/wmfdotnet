@@ -443,6 +443,7 @@ namespace WmfDotNet
                 textOut.Text,
                 new Rect(frameX, frameY, frameWidth, frameHeight),
                 font,
+                // Alignment is already applied to the local frame origin.
                 TextAlignment.Left,
                 null,
                 new SolidBrush(textColor));
@@ -473,6 +474,7 @@ namespace WmfDotNet
         }
 
         private static double ComputeTextRotationDegrees(EmfParamsExtCreateFontIndirectW? fontParams) =>
+            // EMF escapement is stored in tenths of a degree.
             fontParams == null ? 0.0 : fontParams.Escapement / 10.0;
 
         private static TextAlignment ToTextAlignment(uint textAlign)
@@ -523,6 +525,7 @@ namespace WmfDotNet
 
             var averageCharWidth = fontParams?.Width > 0
                 ? Math.Abs(fontParams.Width)
+                // Approximate average character width when the metafile does not specify one.
                 : fontSize * 0.6;
 
             return Math.Max(1.0, averageCharWidth * text.Length);
