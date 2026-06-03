@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 
 namespace WmfDotNet
 {
@@ -159,6 +160,8 @@ namespace WmfDotNet
                     EmfFunc.SetViewportExtEx => EmfParamsSetSize.Read(pr),
                     EmfFunc.SetViewportOrgEx => EmfParamsSetPoint.Read(pr),
                     EmfFunc.SetBkColor => EmfColorRef.Read(pr),
+                    EmfFunc.SetTextColor => EmfColorRef.Read(pr),
+                    EmfFunc.SetTextAlign => EmfParamsSetTextAlign.Read(pr),
                     EmfFunc.SetPolyFillMode => EmfParamsSetPolyFillMode.Read(pr),
                     EmfFunc.MoveToEx => EmfParamsSetPoint.Read(pr),
                     EmfFunc.LineTo => EmfParamsSetPoint.Read(pr),
@@ -172,10 +175,12 @@ namespace WmfDotNet
                     EmfFunc.RoundRect => EmfParamsRoundRect.Read(pr),
                     EmfFunc.CreatePen => EmfParamsCreatePen.Read(pr),
                     EmfFunc.CreateBrushIndirect => EmfParamsCreateBrushIndirect.Read(pr),
+                    EmfFunc.ExtCreateFontIndirectW => EmfParamsExtCreateFontIndirectW.Read(pr),
                     EmfFunc.SelectObject => EmfParamsSelectObject.Read(pr),
                     EmfFunc.DeleteObject => EmfParamsDeleteObject.Read(pr),
                     EmfFunc.SetWorldTransform => EmfParamsSetWorldTransform.Read(pr),
                     EmfFunc.ModifyWorldTransform => EmfParamsModifyWorldTransform.Read(pr),
+                    EmfFunc.ExtTextOutW => EmfParamsExtTextOutW.Read(raw),
                     _ => new EmfRawParams(raw)
                 };
             }
@@ -275,6 +280,14 @@ namespace WmfDotNet
 
         internal static EmfParamsSetPolyFillMode Read(BinaryReader reader) =>
             new() { PolyFillMode = (EmfPolyFillMode)reader.ReadUInt32() };
+    }
+
+    public class EmfParamsSetTextAlign : IEmfParams
+    {
+        public uint TextAlignmentMode { get; private set; }
+
+        internal static EmfParamsSetTextAlign Read(BinaryReader reader) =>
+            new() { TextAlignmentMode = reader.ReadUInt32() };
     }
 
     public class EmfParamsPolygon : IEmfParams
@@ -432,6 +445,55 @@ namespace WmfDotNet
         }
     }
 
+    public class EmfParamsExtCreateFontIndirectW : IEmfParams
+    {
+        public uint HandleIndex { get; private set; }
+        public int Height { get; private set; }
+        public int Width { get; private set; }
+        public int Escapement { get; private set; }
+        public int Orientation { get; private set; }
+        public int Weight { get; private set; }
+        public bool Italic { get; private set; }
+        public byte PitchAndFamily { get; private set; }
+        public string FaceName { get; private set; } = string.Empty;
+
+        internal static EmfParamsExtCreateFontIndirectW Read(BinaryReader reader)
+        {
+            var handleIndex = reader.ReadUInt32();
+            var height = reader.ReadInt32();
+            var width = reader.ReadInt32();
+            var escapement = reader.ReadInt32();
+            var orientation = reader.ReadInt32();
+            var weight = reader.ReadInt32();
+            var italic = reader.ReadByte() != 0;
+            _ = reader.ReadByte(); // lfUnderline
+            _ = reader.ReadByte(); // lfStrikeOut
+            _ = reader.ReadByte(); // lfCharSet
+            _ = reader.ReadByte(); // lfOutPrecision
+            _ = reader.ReadByte(); // lfClipPrecision
+            _ = reader.ReadByte(); // lfQuality
+            var pitchAndFamily = reader.ReadByte();
+            // lfFaceName is 32 UTF-16LE characters (64 bytes), null-terminated.
+            var faceNameBytes = reader.ReadBytes(64);
+            var faceNameFull = Encoding.Unicode.GetString(faceNameBytes);
+            var nullIdx = faceNameFull.IndexOf('\0');
+            var faceName = nullIdx >= 0 ? faceNameFull[..nullIdx] : faceNameFull;
+
+            return new EmfParamsExtCreateFontIndirectW
+            {
+                HandleIndex = handleIndex,
+                Height = height,
+                Width = width,
+                Escapement = escapement,
+                Orientation = orientation,
+                Weight = weight,
+                Italic = italic,
+                PitchAndFamily = pitchAndFamily,
+                FaceName = faceName
+            };
+        }
+    }
+
     public class EmfParamsSelectObject : IEmfParams
     {
         public uint ObjectIndex { get; private set; }
@@ -446,6 +508,55 @@ namespace WmfDotNet
 
         internal static EmfParamsDeleteObject Read(BinaryReader reader) =>
             new() { ObjectIndex = reader.ReadUInt32() };
+    }
+
+    public class EmfParamsExtTextOutW : IEmfParams
+    {
+        private const int EmfRecordHeaderSize = 8;
+        private const int BytesPerUnicodeChar = 2;
+
+        public EmfRectL Bounds { get; private set; } = null!;
+        public uint GraphicsMode { get; private set; }
+        public float ScaleEx { get; private set; }
+        public float ScaleEy { get; private set; }
+        public EmfPointL Reference { get; private set; } = null!;
+        public uint Options { get; private set; }
+        public EmfRectL Rectangle { get; private set; } = null!;
+        public string Text { get; private set; } = string.Empty;
+
+        internal static EmfParamsExtTextOutW Read(byte[] raw)
+        {
+            using var ms = new MemoryStream(raw);
+            using var reader = new BinaryReader(ms, Encoding.Default, leaveOpen: true);
+
+            var ext = new EmfParamsExtTextOutW
+            {
+                Bounds = EmfRectL.Read(reader),
+                GraphicsMode = reader.ReadUInt32(),
+                ScaleEx = reader.ReadSingle(),
+                ScaleEy = reader.ReadSingle(),
+                Reference = EmfPointL.Read(reader)
+            };
+
+            uint charCount = reader.ReadUInt32();
+            uint offString = reader.ReadUInt32();
+            ext.Options = reader.ReadUInt32();
+            ext.Rectangle = EmfRectL.Read(reader);
+            _ = reader.ReadUInt32(); // offDx
+
+            if (charCount > raw.Length / BytesPerUnicodeChar)
+                return ext;
+
+            if (charCount > 0 && offString >= EmfRecordHeaderSize)
+            {
+                int stringOffset = (int)offString - EmfRecordHeaderSize;
+                int byteCount = checked((int)charCount * BytesPerUnicodeChar);
+                if (stringOffset >= 0 && stringOffset + byteCount <= raw.Length)
+                    ext.Text = Encoding.Unicode.GetString(raw, stringOffset, byteCount).TrimEnd('\0');
+            }
+
+            return ext;
+        }
     }
 
     public class EmfXForm

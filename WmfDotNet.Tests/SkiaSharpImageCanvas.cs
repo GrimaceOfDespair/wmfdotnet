@@ -55,21 +55,87 @@ namespace WmfDotNet.Tests
             _canvas.Concat(m);
         }
 
+        // Known sans-serif font names that map to a sans-serif fallback when not installed.
+        private static readonly HashSet<string> SansSerifFamilies = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Arial", "Helvetica", "Verdana", "Tahoma", "Calibri", "Segoe UI",
+            "Trebuchet MS", "Century Gothic", "Gill Sans", "Franklin Gothic Medium",
+        };
+
+        private static SKTypeface ResolveTypeface(string? familyName)
+        {
+            if (!string.IsNullOrWhiteSpace(familyName))
+            {
+                var candidate = SKTypeface.FromFamilyName(familyName);
+                // SKTypeface.FromFamilyName never returns null on most platforms — it returns the
+                // closest match. Verify the returned family actually matches the request; if not,
+                // check whether the requested name is a well-known sans-serif family and use a
+                // sans-serif fallback instead of the system default (which may be serif).
+                if (candidate == null
+                    || candidate.FamilyName.Equals(familyName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return candidate ?? SKTypeface.Default;
+                }
+
+                if (SansSerifFamilies.Contains(familyName))
+                {
+                    candidate.Dispose();
+                    return SKTypeface.FromFamilyName("Liberation Sans")
+                        ?? SKTypeface.FromFamilyName("DejaVu Sans")
+                        ?? SKTypeface.Default;
+                }
+
+                return candidate;
+            }
+
+            return SKTypeface.FromFamilyName("Liberation Sans")
+                ?? SKTypeface.FromFamilyName("DejaVu Sans")
+                ?? SKTypeface.Default;
+        }
+
         public TextMetrics MeasureText(string text, Font font) => new();
 
         public void DrawText(string text, Rect frame, Font font, TextAlignment alignment, Pen? pen, Brush? brush)
         {
             if (brush == null) return;
-            // Basic text rendering using SKFont (SkiaSharp 3.x API)
             float fontSize = (float)(font?.Size ?? 12.0);
-            using var skFont = new SKFont(SKTypeface.Default, fontSize);
+            var familyName = font?.Family ?? font?.Name;
+            using var typeface = ResolveTypeface(familyName);
+            using var skFont = new SKFont(typeface, fontSize);
             using var paint = new SKPaint();
             ApplyBrushToFill(brush, paint);
             paint.Style = SKPaintStyle.Fill;
             paint.IsAntialias = true;
+
+            skFont.GetFontMetrics(out var metrics);
+
             float x = (float)frame.X;
-            float y = (float)(frame.Y + frame.Height / 2 + fontSize / 3);
-            _canvas.DrawText(text, x, y, skFont, paint);
+            if (alignment != TextAlignment.Left)
+            {
+                float textWidth = skFont.MeasureText(text, paint);
+                float widthDiff = Math.Max(0, (float)frame.Width - textWidth);
+                if (alignment == TextAlignment.Center)
+                    x += widthDiff / 2f;
+                else if (alignment == TextAlignment.Right)
+                    x += widthDiff;
+            }
+
+            // Convert the frame's top edge into Skia's baseline-based text position.
+            float y = (float)frame.Y - metrics.Ascent;
+            using var textPath = skFont.GetTextPath(text, new SKPoint(x, y));
+            if (textPath.IsEmpty)
+            {
+                _canvas.DrawText(text, x, y, skFont, paint);
+                return;
+            }
+
+            var totalMatrix = _canvas.TotalMatrix;
+            textPath.Transform(totalMatrix);
+
+            _canvas.Save();
+            _canvas.ResetMatrix();
+            _canvas.DrawPath(textPath, paint);
+            _canvas.Restore();
         }
 
         public void DrawPath(IEnumerable<PathOp> ops, Pen? pen, Brush? brush)

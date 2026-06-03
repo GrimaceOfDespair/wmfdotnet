@@ -11,6 +11,12 @@ namespace WmfDotNet
     {
         private readonly Emf _emf;
         private static readonly Color Transparent = new(0, 0, 0, 0);
+        private const uint TaRight = 0x0002;
+        private const uint TaCenter = 0x0006;
+        private const uint TaBottom = 0x0008;
+        private const uint TaBaseline = 0x0018;
+        private const double BaselineOffsetRatio = 0.8;
+        private const double RotationThresholdDegrees = 0.01;
 
         public EmfWriter(Emf emf)
         {
@@ -35,13 +41,14 @@ namespace WmfDotNet
         {
             if (canvas == null) throw new ArgumentNullException(nameof(canvas));
 
-            int windowOrgX = 0, windowOrgY = 0;
+            int windowOrgX = _emf.Header.Bounds.Left;
+            int windowOrgY = _emf.Header.Bounds.Top;
             int windowExtX = Math.Max(1, Math.Abs(_emf.Header.Bounds.Right - _emf.Header.Bounds.Left));
             int windowExtY = Math.Max(1, Math.Abs(_emf.Header.Bounds.Bottom - _emf.Header.Bounds.Top));
 
             int viewportOrgX = 0, viewportOrgY = 0;
-            int viewportExtX = _emf.Header.DeviceSizePixels.X != 0 ? Math.Abs(_emf.Header.DeviceSizePixels.X) : width;
-            int viewportExtY = _emf.Header.DeviceSizePixels.Y != 0 ? Math.Abs(_emf.Header.DeviceSizePixels.Y) : height;
+            int viewportExtX = windowExtX;
+            int viewportExtY = windowExtY;
 
             Color backgroundColor = Colors.White;
             var world = Affine.Identity;
@@ -50,6 +57,9 @@ namespace WmfDotNet
 
             Pen currentPen = new Pen(Colors.Black, 1);
             Brush currentBrush = new SolidBrush(Colors.Black);
+            Color currentTextColor = Colors.Black;
+            uint currentTextAlign = 0;
+            EmfParamsExtCreateFontIndirectW? currentFont = null;
             double curX = 0, curY = 0;
 
             canvas.FillRectangle(new Rect(0, 0, width, height), backgroundColor);
@@ -111,10 +121,17 @@ namespace WmfDotNet
 
                     case EmfFunc.SetBkColor:
                         if (record.Params is EmfColorRef bgColor)
-                        {
                             backgroundColor = ToNGraphicsColor(bgColor);
-                            canvas.FillRectangle(new Rect(0, 0, width, height), backgroundColor);
-                        }
+                        break;
+
+                    case EmfFunc.SetTextColor:
+                        if (record.Params is EmfColorRef textColor)
+                            currentTextColor = ToNGraphicsColor(textColor);
+                        break;
+
+                    case EmfFunc.SetTextAlign:
+                        if (record.Params is EmfParamsSetTextAlign textAlign)
+                            currentTextAlign = textAlign.TextAlignmentMode;
                         break;
 
                     case EmfFunc.CreateBrushIndirect:
@@ -131,6 +148,13 @@ namespace WmfDotNet
                         }
                         break;
 
+                    case EmfFunc.ExtCreateFontIndirectW:
+                        if (record.Params is EmfParamsExtCreateFontIndirectW font)
+                        {
+                            gdiObjectTable[font.HandleIndex] = new EmfGdiObject(EmfGdiObjectKind.Font, font);
+                        }
+                        break;
+
                     case EmfFunc.SelectObject:
                         if (record.Params is EmfParamsSelectObject sel)
                         {
@@ -141,8 +165,10 @@ namespace WmfDotNet
                             {
                                 if (obj.Kind == EmfGdiObjectKind.Pen)
                                     currentPen = MakePen((EmfParamsCreatePen)obj.Params);
-                                else
+                                else if (obj.Kind == EmfGdiObjectKind.Brush)
                                     currentBrush = MakeBrush((EmfParamsCreateBrushIndirect)obj.Params);
+                                else if (obj.Kind == EmfGdiObjectKind.Font)
+                                    currentFont = (EmfParamsExtCreateFontIndirectW)obj.Params;
                             }
                         }
                         break;
@@ -279,6 +305,16 @@ namespace WmfDotNet
                         }
                         break;
 
+                    case EmfFunc.ExtTextOutW:
+                        if (record.Params is EmfParamsExtTextOutW textOut && !string.IsNullOrWhiteSpace(textOut.Text))
+                        {
+                            DrawText(canvas, textOut, currentFont, currentTextColor, currentTextAlign, world,
+                                windowOrgX, windowOrgY, windowExtX, windowExtY,
+                                viewportOrgX, viewportOrgY, viewportExtX, viewportExtY,
+                                width, height);
+                        }
+                        break;
+
                     case EmfFunc.SetPolyFillMode:
                         break;
 
@@ -376,6 +412,126 @@ namespace WmfDotNet
             }
         }
 
+        private static void DrawText(
+            ICanvas canvas,
+            EmfParamsExtTextOutW textOut,
+            EmfParamsExtCreateFontIndirectW? fontParams,
+            Color textColor,
+            uint textAlign,
+            Affine world,
+            int wOrgX, int wOrgY, int wExtX, int wExtY,
+            int vOrgX, int vOrgY, int vExtX, int vExtY,
+            int canvasW, int canvasH)
+        {
+            var (x, y) = MapPoint(textOut.Reference.X, textOut.Reference.Y, world,
+                wOrgX, wOrgY, wExtX, wExtY, vOrgX, vOrgY, vExtX, vExtY, canvasW, canvasH);
+
+            var font = MakeFont(fontParams, world, wOrgX, wOrgY, wExtX, wExtY, vOrgX, vOrgY, vExtX, vExtY, canvasW, canvasH);
+            var fontSize = Math.Max(1.0, font.Size);
+            var frameWidth = ComputeTextWidth(textOut.Text, fontParams, fontSize);
+            var frameHeight = fontSize;
+            var frameX = ComputeTextFrameX(ToTextAlignment(textAlign), frameWidth);
+            var frameY = ComputeTextFrameY(textAlign, frameHeight);
+            var rotationDegrees = ComputeTextRotationDegrees(fontParams);
+
+            canvas.SaveState();
+            canvas.Transform(NGraphics.Transform.Translate(x, y));
+            if (Math.Abs(rotationDegrees) >= RotationThresholdDegrees)
+                canvas.Transform(NGraphics.Transform.Rotate(rotationDegrees));
+
+            canvas.DrawText(
+                textOut.Text,
+                new Rect(frameX, frameY, frameWidth, frameHeight),
+                font,
+                // Alignment is already applied to the local frame origin.
+                TextAlignment.Left,
+                null,
+                new SolidBrush(textColor));
+            canvas.RestoreState();
+        }
+
+        private static Font MakeFont(
+            EmfParamsExtCreateFontIndirectW? fontParams,
+            Affine world,
+            int wOrgX, int wOrgY, int wExtX, int wExtY,
+            int vOrgX, int vOrgY, int vExtX, int vExtY,
+            int canvasW, int canvasH)
+        {
+            if (fontParams == null)
+                return new Font("Arial", 12.0);
+
+            var logicalHeight = Math.Abs(fontParams.Height);
+            if (logicalHeight <= 0)
+                logicalHeight = 12;
+
+            var (x0, y0) = MapPoint(0, 0, world, wOrgX, wOrgY, wExtX, wExtY, vOrgX, vOrgY, vExtX, vExtY, canvasW, canvasH);
+            var (x1, y1) = MapPoint(0, logicalHeight, world, wOrgX, wOrgY, wExtX, wExtY, vOrgX, vOrgY, vExtX, vExtY, canvasW, canvasH);
+            var size = Math.Sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0));
+            size = Math.Max(1.0, size);
+
+            var family = string.IsNullOrWhiteSpace(fontParams.FaceName) ? "Arial" : fontParams.FaceName;
+            return new Font(family, size);
+        }
+
+        private static double ComputeTextRotationDegrees(EmfParamsExtCreateFontIndirectW? fontParams) =>
+            // EMF escapement is stored in tenths of a degree in GDI's coordinate orientation.
+            // Convert to canvas rotation where positive angles rotate clockwise on screen.
+            fontParams == null ? 0.0 : -fontParams.Escapement / 10.0;
+
+        private static TextAlignment ToTextAlignment(uint textAlign)
+        {
+            if ((textAlign & TaCenter) == TaCenter)
+                return TextAlignment.Center;
+            if ((textAlign & TaRight) != 0)
+                return TextAlignment.Right;
+            return TextAlignment.Left;
+        }
+
+        private static bool UsesTopAlignment(uint textAlign)
+        {
+            // TA_BASELINE=0x0018 and TA_BOTTOM=0x0008 use a baseline/bottom reference point.
+            if ((textAlign & TaBaseline) == TaBaseline)
+                return false;
+            if ((textAlign & TaBottom) != 0)
+                return false;
+            return true;
+        }
+
+        private static double ComputeTextFrameX(TextAlignment alignment, double textWidth)
+        {
+            return alignment switch
+            {
+                TextAlignment.Right => -textWidth,
+                TextAlignment.Center => -textWidth / 2.0,
+                _ => 0.0
+            };
+        }
+
+        private static double ComputeTextFrameY(uint textAlign, double frameHeight)
+        {
+            if (UsesTopAlignment(textAlign))
+                return 0.0;
+
+            // TA_BASELINE reference point is baseline; TA_BOTTOM reference point is text bottom.
+            if ((textAlign & TaBaseline) == TaBaseline)
+                return -frameHeight * BaselineOffsetRatio;
+
+            return -frameHeight;
+        }
+
+        private static double ComputeTextWidth(string text, EmfParamsExtCreateFontIndirectW? fontParams, double fontSize)
+        {
+            if (string.IsNullOrEmpty(text))
+                return 1.0;
+
+            var averageCharWidth = fontParams?.Width > 0
+                ? Math.Abs(fontParams.Width)
+                // Approximate average character width when the metafile does not specify one.
+                : fontSize * 0.6;
+
+            return Math.Max(1.0, averageCharWidth * text.Length);
+        }
+
         private static Brush MakeBrush(EmfParamsCreateBrushIndirect brush)
         {
             if (brush.IsNull)
@@ -395,7 +551,7 @@ namespace WmfDotNet
             new(c.Red / 255.0, c.Green / 255.0, c.Blue / 255.0);
     }
 
-    internal enum EmfGdiObjectKind { Pen, Brush }
+    internal enum EmfGdiObjectKind { Pen, Brush, Font }
 
     internal sealed class EmfGdiObject(EmfGdiObjectKind kind, IEmfParams @params)
     {
