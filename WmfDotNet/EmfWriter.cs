@@ -35,7 +35,8 @@ namespace WmfDotNet
         {
             if (canvas == null) throw new ArgumentNullException(nameof(canvas));
 
-            int windowOrgX = _emf.Header.Bounds.Left, windowOrgY = _emf.Header.Bounds.Top;
+            int windowOrgX = _emf.Header.Bounds.Left;
+            int windowOrgY = _emf.Header.Bounds.Top;
             int windowExtX = Math.Max(1, Math.Abs(_emf.Header.Bounds.Right - _emf.Header.Bounds.Left));
             int windowExtY = Math.Max(1, Math.Abs(_emf.Header.Bounds.Bottom - _emf.Header.Bounds.Top));
 
