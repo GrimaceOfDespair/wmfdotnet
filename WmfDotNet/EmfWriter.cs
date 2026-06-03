@@ -474,8 +474,9 @@ namespace WmfDotNet
         }
 
         private static double ComputeTextRotationDegrees(EmfParamsExtCreateFontIndirectW? fontParams) =>
-            // EMF escapement is stored in tenths of a degree.
-            fontParams == null ? 0.0 : fontParams.Escapement / 10.0;
+            // EMF escapement is stored in tenths of a degree in GDI's coordinate orientation.
+            // Convert to canvas rotation where positive angles rotate clockwise on screen.
+            fontParams == null ? 0.0 : -fontParams.Escapement / 10.0;
 
         private static TextAlignment ToTextAlignment(uint textAlign)
         {
