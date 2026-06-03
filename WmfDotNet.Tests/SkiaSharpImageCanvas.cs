@@ -60,15 +60,27 @@ namespace WmfDotNet.Tests
         public void DrawText(string text, Rect frame, Font font, TextAlignment alignment, Pen? pen, Brush? brush)
         {
             if (brush == null) return;
-            // Basic text rendering using SKFont (SkiaSharp 3.x API)
             float fontSize = (float)(font?.Size ?? 12.0);
-            using var skFont = new SKFont(SKTypeface.Default, fontSize);
+            var familyName = font?.Family ?? font?.Name;
+            using var typeface = string.IsNullOrWhiteSpace(familyName)
+                ? SKTypeface.Default
+                : SKTypeface.FromFamilyName(familyName) ?? SKTypeface.Default;
+            using var skFont = new SKFont(typeface, fontSize);
             using var paint = new SKPaint();
             ApplyBrushToFill(brush, paint);
             paint.Style = SKPaintStyle.Fill;
             paint.IsAntialias = true;
+
+            float textWidth = skFont.MeasureText(text, paint);
+            skFont.GetFontMetrics(out var metrics);
+
             float x = (float)frame.X;
-            float y = (float)(frame.Y + frame.Height / 2 + fontSize / 3);
+            if (alignment == TextAlignment.Center)
+                x += Math.Max(0, (float)frame.Width - textWidth) / 2f;
+            else if (alignment == TextAlignment.Right)
+                x += Math.Max(0, (float)frame.Width - textWidth);
+
+            float y = (float)frame.Y - metrics.Ascent;
             _canvas.DrawText(text, x, y, skFont, paint);
         }
 

@@ -427,17 +427,25 @@ namespace WmfDotNet
 
             var font = MakeFont(fontParams, world, wOrgX, wOrgY, wExtX, wExtY, vOrgX, vOrgY, vExtX, vExtY, canvasW, canvasH);
             var fontSize = Math.Max(1.0, font.Size);
+            var frameWidth = EstimateTextWidth(textOut.Text, fontParams, fontSize);
+            var frameHeight = fontSize;
+            var frameX = ComputeTextFrameX(ToTextAlignment(textAlign), frameWidth);
+            var frameY = ComputeTextFrameY(textAlign, frameHeight);
+            var rotationDegrees = ComputeTextRotationDegrees(fontParams);
 
-            var alignment = ToTextAlignment(textAlign);
-            var (frameX, frameWidth) = alignment switch
-            {
-                TextAlignment.Right => (0.0, Math.Max(1.0, x)),
-                TextAlignment.Center => BuildCenteredFrame(x, canvasW),
-                _ => (x, Math.Max(1.0, canvasW - x))
-            };
+            canvas.SaveState();
+            canvas.Transform(NGraphics.Transform.Translate(x, y));
+            if (Math.Abs(rotationDegrees) > double.Epsilon)
+                canvas.Transform(NGraphics.Transform.Rotate(rotationDegrees));
 
-            var frameY = ComputeTextFrameY(textAlign, y, fontSize);
-            canvas.DrawText(textOut.Text, new Rect(frameX, frameY, frameWidth, fontSize), font, alignment, null, new SolidBrush(textColor));
+            canvas.DrawText(
+                textOut.Text,
+                new Rect(frameX, frameY, frameWidth, frameHeight),
+                font,
+                TextAlignment.Left,
+                null,
+                new SolidBrush(textColor));
+            canvas.RestoreState();
         }
 
         private static Font MakeFont(
@@ -463,6 +471,9 @@ namespace WmfDotNet
             return new Font(family, size);
         }
 
+        private static double ComputeTextRotationDegrees(EmfParamsExtCreateFontIndirectW? fontParams) =>
+            fontParams == null ? 0.0 : fontParams.Escapement / 10.0;
+
         private static TextAlignment ToTextAlignment(uint textAlign)
         {
             if ((textAlign & TaCenter) == TaCenter)
@@ -482,22 +493,38 @@ namespace WmfDotNet
             return true;
         }
 
-        private static double ComputeTextFrameY(uint textAlign, double y, double fontSize)
+        private static double ComputeTextFrameX(TextAlignment alignment, double textWidth)
+        {
+            return alignment switch
+            {
+                TextAlignment.Right => -textWidth,
+                TextAlignment.Center => -textWidth / 2.0,
+                _ => 0.0
+            };
+        }
+
+        private static double ComputeTextFrameY(uint textAlign, double frameHeight)
         {
             if (UsesTopAlignment(textAlign))
-                return y;
+                return 0.0;
 
             // TA_BASELINE reference point is baseline; TA_BOTTOM reference point is text bottom.
             if ((textAlign & TaBaseline) == TaBaseline)
-                return y - fontSize * BaselineOffsetRatio;
+                return -frameHeight * BaselineOffsetRatio;
 
-            return y - fontSize;
+            return -frameHeight;
         }
 
-        private static (double x, double width) BuildCenteredFrame(double centerX, int canvasWidth)
+        private static double EstimateTextWidth(string text, EmfParamsExtCreateFontIndirectW? fontParams, double fontSize)
         {
-            var halfWidth = Math.Max(Math.Max(centerX, canvasWidth - centerX), 1.0);
-            return (centerX - halfWidth, halfWidth * 2.0);
+            if (string.IsNullOrEmpty(text))
+                return 1.0;
+
+            var averageCharWidth = fontParams?.Width > 0
+                ? Math.Abs(fontParams.Width)
+                : fontSize * 0.6;
+
+            return Math.Max(1.0, averageCharWidth * text.Length);
         }
 
         private static Brush MakeBrush(EmfParamsCreateBrushIndirect brush)

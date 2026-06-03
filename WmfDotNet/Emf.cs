@@ -449,17 +449,21 @@ namespace WmfDotNet
     {
         public uint HandleIndex { get; private set; }
         public int Height { get; private set; }
+        public int Width { get; private set; }
+        public int Escapement { get; private set; }
+        public int Orientation { get; private set; }
         public int Weight { get; private set; }
         public bool Italic { get; private set; }
+        public byte PitchAndFamily { get; private set; }
         public string FaceName { get; private set; } = string.Empty;
 
         internal static EmfParamsExtCreateFontIndirectW Read(BinaryReader reader)
         {
             var handleIndex = reader.ReadUInt32();
             var height = reader.ReadInt32();
-            _ = reader.ReadInt32(); // lfWidth
-            _ = reader.ReadInt32(); // lfEscapement
-            _ = reader.ReadInt32(); // lfOrientation
+            var width = reader.ReadInt32();
+            var escapement = reader.ReadInt32();
+            var orientation = reader.ReadInt32();
             var weight = reader.ReadInt32();
             var italic = reader.ReadByte() != 0;
             _ = reader.ReadByte(); // lfUnderline
@@ -468,7 +472,7 @@ namespace WmfDotNet
             _ = reader.ReadByte(); // lfOutPrecision
             _ = reader.ReadByte(); // lfClipPrecision
             _ = reader.ReadByte(); // lfQuality
-            _ = reader.ReadByte(); // lfPitchAndFamily
+            var pitchAndFamily = reader.ReadByte();
             var faceNameChars = reader.ReadChars(32);
             var faceName = new string(faceNameChars).TrimEnd('\0');
 
@@ -476,8 +480,12 @@ namespace WmfDotNet
             {
                 HandleIndex = handleIndex,
                 Height = height,
+                Width = width,
+                Escapement = escapement,
+                Orientation = orientation,
                 Weight = weight,
                 Italic = italic,
+                PitchAndFamily = pitchAndFamily,
                 FaceName = faceName
             };
         }
