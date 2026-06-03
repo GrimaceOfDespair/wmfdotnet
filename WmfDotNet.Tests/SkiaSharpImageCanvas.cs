@@ -55,6 +55,44 @@ namespace WmfDotNet.Tests
             _canvas.Concat(m);
         }
 
+        // Known sans-serif font names that map to a sans-serif fallback when not installed.
+        private static readonly HashSet<string> SansSerifFamilies = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Arial", "Helvetica", "Verdana", "Tahoma", "Calibri", "Segoe UI",
+            "Trebuchet MS", "Century Gothic", "Gill Sans", "Franklin Gothic Medium",
+        };
+
+        private static SKTypeface ResolveTypeface(string? familyName)
+        {
+            if (!string.IsNullOrWhiteSpace(familyName))
+            {
+                var candidate = SKTypeface.FromFamilyName(familyName);
+                // SKTypeface.FromFamilyName never returns null on most platforms — it returns the
+                // closest match. Verify the returned family actually matches the request; if not,
+                // check whether the requested name is a well-known sans-serif family and use a
+                // sans-serif fallback instead of the system default (which may be serif).
+                if (candidate == null
+                    || candidate.FamilyName.Equals(familyName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return candidate ?? SKTypeface.Default;
+                }
+
+                if (SansSerifFamilies.Contains(familyName))
+                {
+                    candidate.Dispose();
+                    return SKTypeface.FromFamilyName("Liberation Sans")
+                        ?? SKTypeface.FromFamilyName("DejaVu Sans")
+                        ?? SKTypeface.Default;
+                }
+
+                return candidate;
+            }
+
+            return SKTypeface.FromFamilyName("Liberation Sans")
+                ?? SKTypeface.FromFamilyName("DejaVu Sans")
+                ?? SKTypeface.Default;
+        }
+
         public TextMetrics MeasureText(string text, Font font) => new();
 
         public void DrawText(string text, Rect frame, Font font, TextAlignment alignment, Pen? pen, Brush? brush)
@@ -62,9 +100,7 @@ namespace WmfDotNet.Tests
             if (brush == null) return;
             float fontSize = (float)(font?.Size ?? 12.0);
             var familyName = font?.Family ?? font?.Name;
-            using var typeface = string.IsNullOrWhiteSpace(familyName)
-                ? SKTypeface.Default
-                : SKTypeface.FromFamilyName(familyName) ?? SKTypeface.Default;
+            using var typeface = ResolveTypeface(familyName);
             using var skFont = new SKFont(typeface, fontSize);
             using var paint = new SKPaint();
             ApplyBrushToFill(brush, paint);
