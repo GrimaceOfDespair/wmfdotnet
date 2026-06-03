@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <Version>0.1.1</Version>
     <PackageId>WmfDotNet</PackageId>
-    <Description>Library to read and rasterize WMF (Windows Metafile Format) files</Description>
+    <Description>Library to read and rasterize WMF/EMF (Windows/Enhanced Metafile Format) files</Description>
     <Authors>GrimaceOfDespair</Authors>
     <RepositoryUrl>https://github.com/GrimaceOfDespair/wmfdotnet</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

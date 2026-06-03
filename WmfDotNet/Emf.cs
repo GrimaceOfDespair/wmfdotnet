@@ -101,14 +101,14 @@ namespace WmfDotNet
                 Version = reader.ReadUInt32(),
                 Bytes = reader.ReadUInt32(),
                 RecordCount = reader.ReadUInt32(),
-                HandleCount = reader.ReadUInt16(),
-                _ = reader.ReadUInt16(), // reserved
-                DescriptionLength = reader.ReadUInt32(),
-                DescriptionOffset = reader.ReadUInt32(),
-                PaletteEntries = reader.ReadUInt32(),
-                DeviceSizePixels = EmfSizeL.Read(reader),
-                DeviceSizeMillimeters = EmfSizeL.Read(reader)
+                HandleCount = reader.ReadUInt16()
             };
+            _ = reader.ReadUInt16(); // reserved
+            h.DescriptionLength = reader.ReadUInt32();
+            h.DescriptionOffset = reader.ReadUInt32();
+            h.PaletteEntries = reader.ReadUInt32();
+            h.DeviceSizePixels = EmfSizeL.Read(reader);
+            h.DeviceSizeMillimeters = EmfSizeL.Read(reader);
 
             // Present for 108-byte+ EMR_HEADER variants.
             if (headerRecordSize >= 108)
@@ -125,9 +125,9 @@ namespace WmfDotNet
 
     public class EmfRecord
     {
-        public uint Size { get; private set; }
-        public EmfFunc Function { get; private set; }
-        public IEmfParams? Params { get; private set; }
+        public uint Size { get; internal set; }
+        public EmfFunc Function { get; internal set; }
+        public IEmfParams? Params { get; internal set; }
 
         internal static EmfRecord Read(BinaryReader reader)
         {
