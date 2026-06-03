@@ -11,6 +11,11 @@ namespace WmfDotNet
     {
         private readonly Emf _emf;
         private static readonly Color Transparent = new(0, 0, 0, 0);
+        private const uint TaRight = 0x0002;
+        private const uint TaCenter = 0x0006;
+        private const uint TaBottom = 0x0008;
+        private const uint TaBaseline = 0x0018;
+        private const double BaselineOffsetRatio = 0.8;
 
         public EmfWriter(Emf emf)
         {
@@ -161,7 +166,7 @@ namespace WmfDotNet
                                     currentPen = MakePen((EmfParamsCreatePen)obj.Params);
                                 else if (obj.Kind == EmfGdiObjectKind.Brush)
                                     currentBrush = MakeBrush((EmfParamsCreateBrushIndirect)obj.Params);
-                                else
+                                else if (obj.Kind == EmfGdiObjectKind.Font)
                                     currentFont = (EmfParamsExtCreateFontIndirectW)obj.Params;
                             }
                         }
@@ -427,11 +432,11 @@ namespace WmfDotNet
             var (frameX, frameWidth) = alignment switch
             {
                 TextAlignment.Right => (0.0, Math.Max(1.0, x)),
-                TextAlignment.Center => (x - canvasW / 2.0, Math.Max(1.0, canvasW)),
+                TextAlignment.Center => BuildCenteredFrame(x, canvasW),
                 _ => (x, Math.Max(1.0, canvasW - x))
             };
 
-            var frameY = UsesTopAlignment(textAlign) ? y : y - fontSize;
+            var frameY = ComputeTextFrameY(textAlign, y, fontSize);
             canvas.DrawText(textOut.Text, new Rect(frameX, frameY, frameWidth, fontSize), font, alignment, null, new SolidBrush(textColor));
         }
 
@@ -460,10 +465,9 @@ namespace WmfDotNet
 
         private static TextAlignment ToTextAlignment(uint textAlign)
         {
-            // TA_CENTER=0x0006, TA_RIGHT=0x0002, TA_LEFT=0x0000.
-            if ((textAlign & 0x0006) == 0x0006)
+            if ((textAlign & TaCenter) == TaCenter)
                 return TextAlignment.Center;
-            if ((textAlign & 0x0002) != 0)
+            if ((textAlign & TaRight) != 0)
                 return TextAlignment.Right;
             return TextAlignment.Left;
         }
@@ -471,11 +475,29 @@ namespace WmfDotNet
         private static bool UsesTopAlignment(uint textAlign)
         {
             // TA_BASELINE=0x0018 and TA_BOTTOM=0x0008 use a baseline/bottom reference point.
-            if ((textAlign & 0x0018) == 0x0018)
+            if ((textAlign & TaBaseline) == TaBaseline)
                 return false;
-            if ((textAlign & 0x0008) != 0)
+            if ((textAlign & TaBottom) != 0)
                 return false;
             return true;
+        }
+
+        private static double ComputeTextFrameY(uint textAlign, double y, double fontSize)
+        {
+            if (UsesTopAlignment(textAlign))
+                return y;
+
+            // TA_BASELINE reference point is baseline; TA_BOTTOM reference point is text bottom.
+            if ((textAlign & TaBaseline) == TaBaseline)
+                return y - fontSize * BaselineOffsetRatio;
+
+            return y - fontSize;
+        }
+
+        private static (double x, double width) BuildCenteredFrame(double centerX, int canvasWidth)
+        {
+            var halfWidth = Math.Max(Math.Max(centerX, canvasWidth - centerX), 1.0);
+            return (centerX - halfWidth, halfWidth * 2.0);
         }
 
         private static Brush MakeBrush(EmfParamsCreateBrushIndirect brush)

@@ -501,6 +501,9 @@ namespace WmfDotNet
 
     public class EmfParamsExtTextOutW : IEmfParams
     {
+        private const int EmfRecordHeaderSize = 8;
+        private const int BytesPerUnicodeChar = 2;
+
         public EmfRectL Bounds { get; private set; } = null!;
         public uint GraphicsMode { get; private set; }
         public float ScaleEx { get; private set; }
@@ -513,7 +516,7 @@ namespace WmfDotNet
         internal static EmfParamsExtTextOutW Read(byte[] raw)
         {
             using var ms = new MemoryStream(raw);
-            using var reader = new BinaryReader(ms, Encoding.Unicode, leaveOpen: true);
+            using var reader = new BinaryReader(ms, Encoding.Default, leaveOpen: true);
 
             var ext = new EmfParamsExtTextOutW
             {
@@ -530,10 +533,13 @@ namespace WmfDotNet
             ext.Rectangle = EmfRectL.Read(reader);
             _ = reader.ReadUInt32(); // offDx
 
-            if (charCount > 0 && offString >= 8)
+            if (charCount > raw.Length / BytesPerUnicodeChar)
+                return ext;
+
+            if (charCount > 0 && offString >= EmfRecordHeaderSize)
             {
-                int stringOffset = (int)offString - 8;
-                int byteCount = checked((int)charCount * 2);
+                int stringOffset = (int)offString - EmfRecordHeaderSize;
+                int byteCount = checked((int)charCount * BytesPerUnicodeChar);
                 if (stringOffset >= 0 && stringOffset + byteCount <= raw.Length)
                     ext.Text = Encoding.Unicode.GetString(raw, stringOffset, byteCount).TrimEnd('\0');
             }
