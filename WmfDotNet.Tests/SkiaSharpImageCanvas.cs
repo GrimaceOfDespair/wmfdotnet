@@ -86,7 +86,20 @@ namespace WmfDotNet.Tests
 
             // Convert the frame's top edge into Skia's baseline-based text position.
             float y = (float)frame.Y - metrics.Ascent;
-            _canvas.DrawText(text, x, y, skFont, paint);
+            using var textPath = skFont.GetTextPath(text, new SKPoint(x, y));
+            if (textPath.IsEmpty)
+            {
+                _canvas.DrawText(text, x, y, skFont, paint);
+                return;
+            }
+
+            var totalMatrix = _canvas.TotalMatrix;
+            textPath.Transform(totalMatrix);
+
+            _canvas.Save();
+            _canvas.ResetMatrix();
+            _canvas.DrawPath(textPath, paint);
+            _canvas.Restore();
         }
 
         public void DrawPath(IEnumerable<PathOp> ops, Pen? pen, Brush? brush)
