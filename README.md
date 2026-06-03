@@ -1,2 +1,2 @@
 # wmfdotnet
-Library to read and rasterize wmf files
+Library to read and rasterize WMF and EMF files
